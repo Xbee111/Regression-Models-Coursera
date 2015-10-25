@@ -1,0 +1,64 @@
+---
+title: "Miles per gallon for manual vs automatic transmission"
+author: "Piotr Turski"
+date: "October 24, 2015"
+output: pdf_document
+---
+
+### Executive summary
+
+Based on car parameters given in R dataset `mtcars` we conclude that change in miles per gallon for transmission type depends on car's weight. For cars lighter than 3400lbs manual transmission is better. For heavier cars automatic transmission is better. More precisely: for a car with weight x, the average mpg increase for manual transmission compared to automatic transmission is about 14.08 - 4.14x.
+
+### Exploratory data analisys
+
+```{r message=F}
+data(mtcars)
+str(mtcars)
+library(dplyr)
+cars <- mtcars %>% mutate_each(funs(factor), vs, cyl, gear, carb) %>% 
+        mutate(am = factor(am, labels=c('automatic', 'manual')))
+rownames(cars) <- rownames(mtcars)
+boxplot(mpg ~ am, cars)
+pairs(cars, panel = panel.smooth)
+```
+
+### Model selection
+
+Let's compare a few simple models. Let's start with smallest and full. Looking on the pairs diagram and common sens, good predictors for mpg may be wt, cyl, hp, qsec. Let's see how much variation can we explain using some simple, reasonable models:
+
+
+```{r}
+sapply( c(
+  mpg ~ am, mpg ~ ., mpg ~ cyl, mpg ~ hp, mpg ~ qsec, mpg ~ wt,
+  mpg ~ cyl + wt + qsec + am, mpg ~ cyl + qsec + am, mpg ~ wt + qsec + am, 
+  mpg ~ cyl + wt + am, mpg ~ hp + qsec + am
+), function(formula){summary(lm(formula, cars))$adj.r.squared})
+```
+
+We got best score using `mpg ~ wt + qsec + am`. Based on `pairs` plot, `wt` and `am` are somehow correlated. Let's see if we can improve the model by adding interaction between those parameters:
+```{r}
+fit <- lm(mpg ~ qsec + am * wt, cars)
+summary(fit)
+```
+88% seems good enough and have all coefficients statistically significant.
+
+### Diagnostics
+
+```{r}
+par(mfrow = c(2,2))
+plot(fit)
+```
+
+Based on the diagnostic plot, residuals seem normally distributed without any additional patterns.
+
+### Conclusion
+```{r}
+summary(fit)$coefficients
+```
+
+#### Interpretation:
+For a car with weight x, the average mpg increase for manual transmission compared to automatic transmission (having other parameters constant) is about 14.08 - 4.14x. So for cars lighter than `r round(14.079428 / 4.141376 * 1000)`lbs manual transmission gives better mpg. For heavier cars, automatic transmission is better.
+
+#### Uncertainty:
+All the coefficients are statistically significant for the 0.99 significance level.
+
